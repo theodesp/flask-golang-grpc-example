@@ -2,12 +2,50 @@ version: '3'
 
 # Data volume for Mongo
 volumes:
-  mongostorage:
+ mongostorage:
 
 services:
+    proxy:
+        image: jwilder/nginx-proxy:alpine
+        container_name: nginx-proxy
+        networks:
+          front-end:
+        volumes:
+          - /var/run/docker.sock:/tmp/docker.sock:ro
+        ports:
+          - "80:80"
+
+    client:
+        build:
+          context: ./src/client
+          dockerfile: Dockerfile
+        container_name: client
+        networks:
+          front-end:
+          back-end:
+        depends_on:
+          - proxy
+        environment:
+          - VIRTUAL_HOST=client.local
+
+    server:
+        build:
+          context: ./src/server
+          dockerfile: Dockerfile
+        container_name: server
+        networks:
+          back-end:
+        depends_on:
+          - "mongodb"
+        environment:
+          - MONGO_URL=mongodb://mongo:27017
+          - VIRTUAL_HOST=server.local
+
     mongodb:
         image: mongo:latest
         container_name: "mongodb"
+        networks:
+          back-end:
         environment:
           - MONGO_DATA_DIR=/data/db
           - MONGO_LOG_DIR=/dev/null
@@ -15,11 +53,8 @@ services:
           - mongostorage:/data/db
         ports:
           - 27017:27017
-        networks:
-          - back-end
         command: mongod --smallfiles --logpath=/dev/null # --quiet
         restart: always
-
 
 networks:
   front-end:
